@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>   
+<beans xmlns="http://www.springframework.org/schema/beans"  
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"  
+  xmlns:tx="http://www.springframework.org/schema/tx" xmlns:jdbc="http://www.springframework.org/schema/jdbc"  
+  xmlns:p="http://www.springframework.org/schema/p"  
+  xsi:schemaLocation="http://www.springframework.org/schema/beans   
+    http://www.springframework.org/schema/beans/spring-beans-3.0.xsd   
+    http://www.springframework.org/schema/context   
+    http://www.springframework.org/schema/context/spring-context-3.0.xsd   
+    http://www.springframework.org/schema/tx   
+    http://www.springframework.org/schema/tx/spring-tx-3.0.xsd   
+    http://www.springframework.org/schema/jdbc   
+    http://www.springframework.org/schema/jdbc/spring-jdbc-3.0.xsd"
+    default-autowire="byName" default-lazy-init="true">  
+ <!-- 注意上面的default-autowire="byName"，如果没有这个声明那么HibernateDaoSupport中的sessionFactory不会被注入 -->  
+	<description>define all the basic bean mappings</description>
+	<context:annotation-config />
+	
+	<!-- for properties files -->
+<!-- 	<bean id="propertyConfigurer" -->
+<!-- 		class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer"> -->
+<!-- 		<property name="locations"> -->
+<!-- 			<list> -->
+<!-- 				<value>classpath*:config/jdbc.properties</value> -->
+<!-- 			</list> -->
+<!-- 		</property> -->
+<!-- 	</bean> -->
+
+    <bean id="multipartResolver"
+  class="org.springframework.web.multipart.commons.CommonsMultipartResolver">
+  <!-- 以字节为单位的最大上传文件的大小 -->
+  <property name="maxUploadSize" value="10000000" />
+ </bean>
+    
+    
+	<!-- mysql -->
+	<bean id="dataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+		<property name="driverClassName" value="com.mysql.jdbc.Driver"/>
+		<property name="url" value="jdbc:mysql://192.168.10.254:3306/activision?characterEncoding=utf-8"/>
+		<property name="username" value="root"/>
+		<property name="password" value="mpupawebdb"/>
+	</bean>
+	
+	<!--Hibernate SessionFatory-->
+	<bean id="sessionFactory" class="org.springframework.orm.hibernate3.annotation.AnnotationSessionFactoryBean">
+		<property name="dataSource" ref="dataSource" />
+		<property name="namingStrategy">
+			<bean class="org.hibernate.cfg.ImprovedNamingStrategy" />
+		</property>
+		
+		<property name="hibernateProperties">
+			<props>
+				<prop key="hibernate.dialect">org.hibernate.dialect.MySQLDialect</prop>
+				<prop key="hibernate.show_sql">true</prop>
+				<prop key="hibernate.cache.provider_class">org.hibernate.cache.EhCacheProvider</prop>
+				<prop key="hibernate.cache.use_query_cache">false</prop>
+				<prop key="hibernate.jdbc.batch_size">50</prop>
+				<prop key="hibernate.cache.use_second_level_cache">false</prop>			
+			</props>
+		</property>
+	 	 <property name="packagesToScan" value="com.mpupa..**.model"/> 
+	 	<!--<property name="packagesToScan" value="com.mpupa..**.web.webkit"/>  
+	 	<property name="packagesToScan">
+	 		<list>
+	 			<value>com.mpupa.model.*</value>
+	 			<value>com.mpupa.web.webkit.*</value>
+	 		</list>
+	 	</property>-->
+	</bean>
+
+    
+	<!--Hibernate TransactionManager-->
+	<bean id="transactionManager"
+		class="org.springframework.orm.hibernate3.HibernateTransactionManager">
+		<property name="sessionFactory" ref="sessionFactory" />
+	</bean>	
+	
+	 <!-- 自动扫描组件，这里要把web下面的 controller去除，他们是在action-servlet.xml中配置的，如果不去除会影响事务管理的。--> 
+	<context:component-scan base-package="com.mpupa">
+		<context:include-filter type="regex" expression="com\.mpupa\.dao\..*"/>
+		<context:include-filter type="regex" expression="com\.mpupa\.service\..*"/>
+	</context:component-scan>
+	<!-- 
+	 -->
+	<!-- Support @Transactional tag -->
+	<tx:annotation-driven />
+
+	<!-- 定时任务  -->
+
+
+
+<!-- 要调用的工作类 -->
+    <bean id="fileCleanerJob" class="com.mpupa.utils.FileCleaner"></bean>
+    <!-- 定义调用对象和调用对象的方法 -->
+    <bean id="jobtask"
+        class="org.springframework.scheduling.quartz.MethodInvokingJobDetailFactoryBean">
+        <!-- 调用的类 -->
+        <property name="targetObject">
+            <ref bean="fileCleanerJob" />
+        </property>
+        <!-- 调用类中的方法 -->
+        <property name="targetMethod">
+            <value>cleanOldFiles</value>
+        </property>
+    </bean>
+    <!-- 定义触发时间 -->
+    <bean id="doTime"
+        class="org.springframework.scheduling.quartz.CronTriggerBean">
+        <property name="jobDetail">
+            <ref bean="jobtask" />
+        </property>
+        <!-- cron表达式 -->
+          <property name="cronExpression">
+           <value>0 15 10 * * ? *</value> <!-- 每天早上十点十五分删除 -->
+       </property>
+    </bean>
+    <!-- 总管理类 如果将lazy-init='false'那么容器启动就会执行调度程序  -->
+    <bean id="startQuertz" lazy-init="false" autowire="no"
+        class="org.springframework.scheduling.quartz.SchedulerFactoryBean">
+        <property name="triggers">
+            <list>
+                <ref bean="doTime" />
+            </list>
+        </property>
+    </bean>
+
+</beans>
